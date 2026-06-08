@@ -1,10 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../models/models.dart';
+import '../services/firestore_service.dart';
 import '../services/haptic_service.dart';
+import '../state/app_state.dart';
 import '../theme/gata_theme.dart';
+import '../widgets/quick_reactions.dart';
 import 'chat/chat_screen.dart';
 import 'posts/posts_screen.dart';
+import 'reaction_overlay.dart';
 import 'shared_space/shared_space_screen.dart';
 import 'mood/mood_screen.dart';
+import 'touch/touch_screen.dart';
 import 'games/games_screen.dart';
 
 class HomeShell extends StatefulWidget {
