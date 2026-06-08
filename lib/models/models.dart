@@ -158,21 +158,3 @@ const kMoods = <(String, String)>[
 
 /// Avatar emoji choices at sign-in.
 const kAvatarChoices = ['💖', '🌷', '🦋', '🐻', '🌙', '⭐', '🍓', '🐱'];
-
-/// A song card for the music reels.
-class SongCard {
-  final String youtubeId;
-  final String title;
-  final String artist;
-  final String mood;
-  final String thumbnailUrl;
-
-  const SongCard({
-    required this.youtubeId,
-    required this.title,
-    required this.artist,
-    required this.mood,
-    String? thumbnailUrl,
-  }) : thumbnailUrl = thumbnailUrl ??
-            'https://img.youtube.com/vi/$youtubeId/hqdefault.jpg';
-}
