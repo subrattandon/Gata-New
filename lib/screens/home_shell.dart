@@ -5,6 +5,7 @@ import 'chat/chat_screen.dart';
 import 'posts/posts_screen.dart';
 import 'shared_space/shared_space_screen.dart';
 import 'mood/mood_screen.dart';
+import 'music/music_reels_screen.dart';
 import 'games/games_screen.dart';
 
 class HomeShell extends StatefulWidget {
