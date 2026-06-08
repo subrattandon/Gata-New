@@ -10,6 +10,7 @@ import 'state/app_state.dart';
 import 'theme/gata_theme.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home_shell.dart';
+import 'screens/splash_screen.dart';
 
 bool firebaseReady = false;
 
