@@ -131,6 +131,7 @@ const _kNavItems = [
   (icon: Icons.grid_view_outlined, label: 'Posts'),
   (icon: Icons.favorite_border_rounded, label: 'Ours'),
   (icon: Icons.mood_outlined, label: 'Mood'),
+  (icon: Icons.touch_app_outlined, label: 'Feel'),
   (icon: Icons.sports_esports_outlined, label: 'Play'),
 ];
 
