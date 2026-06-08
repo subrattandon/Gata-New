@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
@@ -13,23 +14,33 @@ class PhotoService {
   static const _uuid = Uuid();
 
   static Future<String?> pickFromGallery() async {
-    final XFile? file = await _picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 2000,
-      imageQuality: 88,
-    );
-    if (file == null) return null;
-    return _persist(file);
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 2000,
+        imageQuality: 88,
+      );
+      if (file == null) return null;
+      return _persist(file);
+    } catch (e) {
+      debugPrint('PhotoService.pickFromGallery error: $e');
+      return null;
+    }
   }
 
   static Future<String?> pickFromCamera() async {
-    final XFile? file = await _picker.pickImage(
-      source: ImageSource.camera,
-      maxWidth: 2000,
-      imageQuality: 88,
-    );
-    if (file == null) return null;
-    return _persist(file);
+    try {
+      final XFile? file = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 2000,
+        imageQuality: 88,
+      );
+      if (file == null) return null;
+      return _persist(file);
+    } catch (e) {
+      debugPrint('PhotoService.pickFromCamera error: $e');
+      return null;
+    }
   }
 
   static Future<String> _persist(XFile file) async {

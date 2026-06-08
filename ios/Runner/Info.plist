@@ -49,6 +49,12 @@
 	</dict>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Gata needs access to your camera to capture moments with your partner.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Gata needs access to your photos to share moments with your partner.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Gata needs microphone access for video recording.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
