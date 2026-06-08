@@ -16,13 +16,14 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  // 0=Posts, 1=Ours, 2=Mood, 3=Play — Chat is pushed as a separate route.
+  // 0=Posts, 1=Ours, 2=Mood, 3=Music, 4=Play — Chat is pushed as a separate route.
   int _currentIndex = 0;
 
   static const _screens = [
     PostsScreen(),
     SharedSpaceScreen(),
     MoodScreen(),
+    MusicReelsScreen(),
     GamesScreen(),
   ];
 
