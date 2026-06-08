@@ -54,12 +54,25 @@ class GataApp extends StatelessWidget {
   }
 }
 
-/// Gates on Firebase auth state, then on AppState profile completion.
-class _Root extends StatelessWidget {
+/// Shows splash then gates on Firebase auth state.
+class _Root extends StatefulWidget {
   const _Root();
 
   @override
+  State<_Root> createState() => _RootState();
+}
+
+class _RootState extends State<_Root> {
+  bool _splashDone = false;
+
+  @override
   Widget build(BuildContext context) {
+    if (!_splashDone) {
+      return SplashScreen(
+        onFinished: () => setState(() => _splashDone = true),
+      );
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snap) {
@@ -72,7 +85,6 @@ class _Root extends StatelessWidget {
         if (user == null) {
           return const LoginScreen(key: ValueKey('login'));
         }
-        // Signed in — start Firestore sync then show the app.
         context.read<AppState>().startFirestoreSync();
         return const HomeShell(key: ValueKey('home'));
       },
