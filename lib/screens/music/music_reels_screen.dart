@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../models/models.dart';
 import '../../services/haptic_service.dart';
@@ -22,7 +22,7 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
   late PageController _pageController;
   int _currentPage = 0;
 
-  final Map<int, YoutubePlayerController> _controllers = {};
+  final Map<int, WebViewController> _webControllers = {};
 
   @override
   void initState() {
@@ -31,27 +31,31 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
     _selectedMood = app.moodMe?.label ?? 'Loved';
     _songs = MusicService.songsForMood(_selectedMood);
     _pageController = PageController();
-    _initController(0);
+    _initWebController(0);
   }
 
-  YoutubePlayerController _initController(int index) {
-    if (_controllers.containsKey(index)) return _controllers[index]!;
-    if (index >= _songs.length) return _controllers.values.first;
+  WebViewController _initWebController(int index) {
+    if (_webControllers.containsKey(index)) return _webControllers[index]!;
+    if (index >= _songs.length) return _webControllers.values.first;
 
-    final controller = YoutubePlayerController.fromVideoId(
-      videoId: _songs[index].youtubeId,
-      autoPlay: index == _currentPage,
-      params: const YoutubePlayerParams(
-        showControls: true,
-        mute: false,
-        showFullscreenButton: false,
-        loop: true,
-        showVideoAnnotations: false,
-        enableCaption: false,
-        pointerEvents: PointerEvents.auto,
-      ),
-    );
-    _controllers[index] = controller;
+    final song = _songs[index];
+    final controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0xFF0B0B0B))
+      ..enableZoom(false)
+      ..loadRequest(Uri.parse(
+          'https://www.youtube.com/embed/${song.youtubeId}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1&iv_load_policy=3&fs=0&loop=1&playlist=${song.youtubeId}'))
+      ..setNavigationDelegate(NavigationDelegate(
+        onNavigationRequest: (request) {
+          // Keep navigation within the embed
+          if (request.url.contains('youtube.com/embed')) {
+            return NavigationDecision.navigate;
+          }
+          return NavigationDecision.prevent;
+        },
+      ));
+
+    _webControllers[index] = controller;
     return controller;
   }
 
@@ -64,27 +68,27 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
       _songs = MusicService.songsForMood(mood);
       _currentPage = 0;
       _pageController.jumpToPage(0);
-      _initController(0);
+      _initWebController(0);
     });
   }
 
   void _onPageChanged(int page) {
     Haptic.light();
-    // Pause previous
-    _controllers[_currentPage]?.pauseVideo();
+    // Pause previous by loading about:blank then reinit when needed
+    _webControllers[_currentPage]?.runJavaScript(
+        "document.querySelector('video')?.pause();");
     setState(() => _currentPage = page);
-    // Init and play new
-    _initController(page);
-    _controllers[page]?.playVideo();
+    // Init new page
+    _initWebController(page);
+    // Auto-play new page
+    _webControllers[page]?.runJavaScript(
+        "document.querySelector('video')?.play();");
     // Pre-init next
-    if (page + 1 < _songs.length) _initController(page + 1);
+    if (page + 1 < _songs.length) _initWebController(page + 1);
   }
 
   void _disposeAllControllers() {
-    for (final c in _controllers.values) {
-      c.close();
-    }
-    _controllers.clear();
+    _webControllers.clear();
   }
 
   @override
@@ -111,10 +115,10 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
               itemCount: _songs.length,
               onPageChanged: _onPageChanged,
               itemBuilder: (context, index) {
-                _initController(index);
+                _initWebController(index);
                 return _MusicReelCard(
                   song: _songs[index],
-                  controller: _controllers[index]!,
+                  controller: _webControllers[index]!,
                   isActive: index == _currentPage,
                 );
               },
@@ -125,38 +129,41 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
               top: 0,
               left: 0,
               right: 0,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(0, mq.padding.top + 8, 0, 12),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Color(0xDD0B0B0B),
-                      Color(0x000B0B0B),
-                    ],
+              child: IgnorePointer(
+                ignoring: false,
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(0, mq.padding.top + 8, 0, 12),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Color(0xDD0B0B0B),
+                        Color(0x000B0B0B),
+                      ],
+                    ),
                   ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
-                        'Music Vibes',
-                        style: GoogleFonts.playfairDisplay(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'Music Vibes',
+                          style: GoogleFonts.playfairDisplay(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    _MoodChipBar(
-                      selectedMood: _selectedMood,
-                      onMoodChanged: _onMoodChanged,
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      _MoodChipBar(
+                        selectedMood: _selectedMood,
+                        onMoodChanged: _onMoodChanged,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -166,22 +173,24 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
               bottom: 0,
               left: 0,
               right: 0,
-              child: Container(
-                padding: EdgeInsets.fromLTRB(
-                    20, 40, 20, mq.padding.bottom + 80),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Color(0xEE0B0B0B),
-                      Color(0x000B0B0B),
-                    ],
+              child: IgnorePointer(
+                child: Container(
+                  padding: EdgeInsets.fromLTRB(
+                      20, 40, 20, mq.padding.bottom + 80),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                      colors: [
+                        Color(0xEE0B0B0B),
+                        Color(0x000B0B0B),
+                      ],
+                    ),
                   ),
+                  child: _songs.isNotEmpty
+                      ? _SongInfo(song: _songs[_currentPage])
+                      : const SizedBox.shrink(),
                 ),
-                child: _songs.isNotEmpty
-                    ? _SongInfo(song: _songs[_currentPage])
-                    : const SizedBox.shrink(),
               ),
             ),
 
@@ -198,9 +207,11 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
             Positioned(
               left: 12,
               top: mq.size.height * 0.45,
-              child: _PageIndicator(
-                total: _songs.length,
-                current: _currentPage,
+              child: IgnorePointer(
+                child: _PageIndicator(
+                  total: _songs.length,
+                  current: _currentPage,
+                ),
               ),
             ),
           ],
@@ -276,7 +287,7 @@ class _MoodChipBar extends StatelessWidget {
 
 class _MusicReelCard extends StatelessWidget {
   final SongCard song;
-  final YoutubePlayerController controller;
+  final WebViewController controller;
   final bool isActive;
 
   const _MusicReelCard({
@@ -289,11 +300,23 @@ class _MusicReelCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: GataColors.bg,
-      child: Center(
-        child: YoutubePlayer(
-          controller: controller,
-          aspectRatio: 16 / 9,
-        ),
+      child: Column(
+        children: [
+          // Top spacer for mood chips
+          SizedBox(height: MediaQuery.of(context).padding.top + 90),
+          // YouTube player
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: WebViewWidget(controller: controller),
+              ),
+            ),
+          ),
+          // Bottom spacer for song info
+          const SizedBox(height: 160),
+        ],
       ),
     );
   }
@@ -360,7 +383,6 @@ class _SongInfo extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        // Swipe hint
         Row(
           children: [
             Icon(Icons.swipe_vertical_rounded,
@@ -413,7 +435,6 @@ class _ActionButtonsState extends State<_ActionButtons> {
           onTap: () => Haptic.light(),
         ),
         const SizedBox(height: 20),
-        // Spinning disc animation
         _SpinningDisc(),
       ],
     );
@@ -495,7 +516,6 @@ class _PageIndicator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Show max 8 dots
     final showCount = total.clamp(0, 8);
     return Column(
       mainAxisSize: MainAxisSize.min,
