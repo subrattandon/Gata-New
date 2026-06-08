@@ -158,3 +158,80 @@ const kMoods = <(String, String)>[
 
 /// Avatar emoji choices at sign-in.
 const kAvatarChoices = ['💖', '🌷', '🦋', '🐻', '🌙', '⭐', '🍓', '🐱'];
+
+/// A touch event for "Tap to Feel".
+class TouchEvent {
+  final String id;
+  final Sender sender;
+  final double x;
+  final double y;
+  final DateTime time;
+
+  const TouchEvent({
+    required this.id,
+    required this.sender,
+    required this.x,
+    required this.y,
+    required this.time,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'sender': sender.id,
+        'x': x,
+        'y': y,
+        'time': time.toIso8601String(),
+      };
+
+  factory TouchEvent.fromJson(String id, Map<String, dynamic> j) => TouchEvent(
+        id: id,
+        sender: SenderX.fromId(j['sender']),
+        x: (j['x'] as num).toDouble(),
+        y: (j['y'] as num).toDouble(),
+        time: DateTime.parse(j['time']),
+      );
+}
+
+/// Quick reaction types.
+enum ReactionType { hug, kiss, miss }
+
+extension ReactionTypeX on ReactionType {
+  String get emoji => switch (this) {
+        ReactionType.hug => '🤗',
+        ReactionType.kiss => '😘',
+        ReactionType.miss => '🥺',
+      };
+  String get label => switch (this) {
+        ReactionType.hug => 'Hug',
+        ReactionType.kiss => 'Kiss',
+        ReactionType.miss => 'Miss',
+      };
+}
+
+/// A quick reaction event.
+class QuickReaction {
+  final String id;
+  final Sender sender;
+  final ReactionType type;
+  final DateTime time;
+
+  const QuickReaction({
+    required this.id,
+    required this.sender,
+    required this.type,
+    required this.time,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'sender': sender.id,
+        'type': type.name,
+        'time': time.toIso8601String(),
+      };
+
+  factory QuickReaction.fromJson(String id, Map<String, dynamic> j) =>
+      QuickReaction(
+        id: id,
+        sender: SenderX.fromId(j['sender']),
+        type: ReactionType.values.firstWhere((r) => r.name == j['type']),
+        time: DateTime.parse(j['time']),
+      );
+}
