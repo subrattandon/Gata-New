@@ -24,15 +24,40 @@ class HomeShell extends StatefulWidget {
 }
 
 class _HomeShellState extends State<HomeShell> {
-  // 0=Posts, 1=Ours, 2=Mood, 3=Play — Chat is pushed as a separate route.
+  // 0=Posts, 1=Ours, 2=Mood, 3=Feel, 4=Play — Chat is pushed as a separate route.
   int _currentIndex = 0;
+  QuickReaction? _activeReaction;
+  StreamSubscription? _reactionSub;
 
   static const _screens = [
     PostsScreen(),
     SharedSpaceScreen(),
     MoodScreen(),
+    TouchScreen(),
     GamesScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _reactionSub = FirestoreService.watchReactions().listen((reactions) {
+      for (final r in reactions) {
+        if (r.sender == Sender.her &&
+            DateTime.now().difference(r.time).inSeconds < 5 &&
+            _activeReaction == null) {
+          setState(() => _activeReaction = r);
+          FirestoreService.deleteReaction(r.id);
+          break;
+        }
+      }
+    }, onError: (_) {});
+  }
+
+  @override
+  void dispose() {
+    _reactionSub?.cancel();
+    super.dispose();
+  }
 
   void _onNavTap(BuildContext context, int navIndex) {
     Haptic.select();
