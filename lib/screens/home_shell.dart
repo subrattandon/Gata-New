@@ -94,6 +94,8 @@ class _HomeShellState extends State<HomeShell> {
 
     final navH = mq.size.width > 400 ? 66.0 : 62.0;
 
+    final app = context.watch<AppState>();
+
     return Scaffold(
       body: Stack(
         children: [
@@ -108,16 +110,32 @@ class _HomeShellState extends State<HomeShell> {
             ),
             child: _screens[_currentIndex],
           ),
+          // Quick reactions above nav bar
+          Positioned(
+            left: navHPad,
+            right: navHPad,
+            bottom: bottomInset + navH + 26,
+            child: const QuickReactions(),
+          ),
           Positioned(
             left: navHPad,
             right: navHPad,
             bottom: bottomInset + 16,
             child: _FloatingNavBar(
-              // nav indices: 0=Chat,1=Posts,2=Ours,3=Mood,4=Play
+              // nav indices: 0=Chat,1=Posts,2=Ours,3=Mood,4=Feel,5=Play
               activeNavIndex: _currentIndex + 1,
               onTap: (i) => _onNavTap(context, i),
             ),
           ),
+          // Reaction overlay
+          if (_activeReaction != null)
+            Positioned.fill(
+              child: ReactionOverlay(
+                reaction: _activeReaction!,
+                partnerName: app.userFor(Sender.her).name,
+                onDismiss: () => setState(() => _activeReaction = null),
+              ),
+            ),
         ],
       ),
     );
