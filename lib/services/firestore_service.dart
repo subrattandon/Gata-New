@@ -123,4 +123,69 @@ class FirestoreService {
       _room.update({
         '${who.id}Mood': entry.toJson(),
       });
+
+  // ── tap to feel (touches) ──────────────────────────────────
+  static CollectionReference get _touches => _room.collection('touches');
+
+  static Future<void> sendTouch(TouchEvent t) =>
+      _touches.doc(t.id).set({
+        'sender': t.sender.id,
+        'x': t.x,
+        'y': t.y,
+        'time': Timestamp.fromDate(t.time),
+      });
+
+  static Stream<List<TouchEvent>> watchTouches() {
+    return _touches
+        .orderBy('time', descending: true)
+        .limit(10)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) {
+              final data = d.data() as Map<String, dynamic>;
+              return TouchEvent(
+                id: d.id,
+                sender: SenderX.fromId(data['sender']),
+                x: (data['x'] as num).toDouble(),
+                y: (data['y'] as num).toDouble(),
+                time: (data['time'] as Timestamp).toDate(),
+              );
+            })
+            .toList());
+  }
+
+  static Future<void> deleteTouch(String id) => _touches.doc(id).delete();
+
+  // ── quick reactions ────────────────────────────────────────
+  static CollectionReference get _reactions => _room.collection('reactions');
+
+  static Future<void> sendReaction(QuickReaction r) =>
+      _reactions.doc(r.id).set({
+        'sender': r.sender.id,
+        'type': r.type.name,
+        'time': Timestamp.fromDate(r.time),
+      });
+
+  static Stream<List<QuickReaction>> watchReactions() {
+    return _reactions
+        .orderBy('time', descending: true)
+        .limit(5)
+        .snapshots()
+        .map((s) => s.docs
+            .map((d) {
+              final data = d.data() as Map<String, dynamic>;
+              return QuickReaction(
+                id: d.id,
+                sender: SenderX.fromId(data['sender']),
+                type: ReactionType.values.firstWhere(
+                    (r) => r.name == data['type'],
+                    orElse: () => ReactionType.hug),
+                time: (data['time'] as Timestamp).toDate(),
+              );
+            })
+            .toList());
+  }
+
+  static Future<void> deleteReaction(String id) =>
+      _reactions.doc(id).delete();
 }
