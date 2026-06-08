@@ -43,12 +43,12 @@ class _MusicReelsScreenState extends State<MusicReelsScreen> {
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xFF0B0B0B))
       ..enableZoom(false)
+      ..setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1')
       ..loadRequest(Uri.parse(
-          'https://www.youtube.com/embed/${song.youtubeId}?autoplay=1&playsinline=1&controls=1&rel=0&modestbranding=1&iv_load_policy=3&fs=0&loop=1&playlist=${song.youtubeId}'))
+          'https://m.youtube.com/watch?v=${song.youtubeId}'))
       ..setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (request) {
-          // Keep navigation within the embed
-          if (request.url.contains('youtube.com/embed')) {
+          if (request.url.contains('youtube.com') || request.url.contains('googlevideo.com') || request.url.contains('google.com')) {
             return NavigationDecision.navigate;
           }
           return NavigationDecision.prevent;
