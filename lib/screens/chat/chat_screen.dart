@@ -34,6 +34,7 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
   int _lastMsgCount = 0;
+  AppState? _appState;
   @override
   void initState() {
     super.initState();
