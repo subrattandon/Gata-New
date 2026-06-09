@@ -43,9 +43,9 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom(animated: false);
-      final app = context.read<AppState>();
-      _lastMsgCount = app.messages.length;
-      app.addListener(_onMessagesChanged);
+      _appState = context.read<AppState>();
+      _lastMsgCount = _appState!.messages.length;
+      _appState!.addListener(_onMessagesChanged);
     });
   }
   void _onMessagesChanged() {
