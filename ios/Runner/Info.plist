@@ -55,8 +55,6 @@
 	<string>Gata needs access to your photos to share moments with your partner.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Gata needs microphone access for voice and video calls with your partner.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Gata needs camera access for video calls and capturing moments with your partner.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
