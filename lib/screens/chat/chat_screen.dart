@@ -248,6 +248,20 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       ),
       actions: [
+        // Voice call button
+        IconButton(
+          icon: const Icon(Icons.call_rounded, size: 21),
+          color: GataColors.textSecondary,
+          tooltip: 'Voice call',
+          onPressed: () => _startCall(context, app, false),
+        ),
+        // Video call button
+        IconButton(
+          icon: const Icon(Icons.videocam_rounded, size: 22),
+          color: GataColors.textSecondary,
+          tooltip: 'Video call',
+          onPressed: () => _startCall(context, app, true),
+        ),
         _SenderToggle(
           active: app.activeSender,
           onTap: () {
