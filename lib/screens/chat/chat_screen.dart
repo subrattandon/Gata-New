@@ -20,6 +20,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _controller = TextEditingController();
   final _scroll = ScrollController();
+  late final CallService _callService;
+
   void _scrollToBottom({bool animated = true}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
