@@ -130,7 +130,8 @@ class _PostsScreenState extends State<PostsScreen> {
           key: ValueKey(post.id),
           post: post,
           author: app.userFor(post.author),
-          onLike: () => app.toggleLove(post.id),
+          onLove: (id, intensity) => app.sendLove(id, intensity),
+          onCompliment: (text) => app.sendCompliment(post.id, text),
         );
       },
     );
