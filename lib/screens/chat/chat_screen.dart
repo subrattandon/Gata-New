@@ -42,9 +42,27 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
+    _callService = CallService();
     final myEmail = AuthService.myEmail();
     if (myEmail.isNotEmpty) {
       FirestoreService.markSeen(myEmail);
+      _callService.listenForIncomingCalls(myEmail);
+      _callService.onIncomingCall = (callId, callerEmail, isVideo) {
+        if (!mounted) return;
+        final app = context.read<AppState>();
+        Navigator.of(context).push(MaterialPageRoute(
+          fullscreenDialog: true,
+          builder: (_) => CallScreen(
+            callService: _callService,
+            partner: app.userFor(Sender.her),
+            isVideo: isVideo,
+            isIncoming: true,
+            callId: callId,
+            myEmail: myEmail,
+            partnerEmail: app.herEmail,
+          ),
+        ));
+      };
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scrollToBottom(animated: false);
