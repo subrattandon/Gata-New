@@ -81,6 +81,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     _appState?.removeListener(_onMessagesChanged);
+    _callService.dispose();
     _controller.dispose();
     _scroll.dispose();
     super.dispose();
