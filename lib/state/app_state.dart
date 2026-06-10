@@ -238,7 +238,7 @@ class AppState extends ChangeNotifier {
 
   // ── posts ──────────────────────────────────────────────
   Future<void> addPost(String caption, String emoji,
-      {String? imagePath}) async {
+      {String? imagePath, bool isPrivate = false}) async {
     final post = Post(
       id: _uuid.v4(),
       caption: caption.trim(),
@@ -246,6 +246,7 @@ class AppState extends ChangeNotifier {
       imagePath: imagePath,
       author: activeSender,
       time: DateTime.now(),
+      isPrivate: isPrivate,
     );
     posts.insert(0, post);
     notifyListeners();
