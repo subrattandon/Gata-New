@@ -6,9 +6,11 @@ import '../../models/models.dart';
 import '../../services/auth_service.dart';
 import '../../services/haptic_service.dart';
 import '../../services/firestore_service.dart';
+import '../../services/call_service.dart';
 import '../../state/app_state.dart';
 import '../../theme/gata_theme.dart';
 import '../../widgets/chat_bubble.dart';
+import 'call_screen.dart';
 import 'partner_profile_screen.dart';
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
