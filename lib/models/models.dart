@@ -81,6 +81,10 @@ class Post {
   final Sender author;
   final DateTime time;
   bool loved;
+  double loveIntensity; // 0.0–1.0 hold duration fraction
+  Sender? loveSender;
+  DateTime? loveTime;
+  bool isPrivate;
 
   Post({
     required this.id,
@@ -90,6 +94,10 @@ class Post {
     required this.author,
     required this.time,
     this.loved = false,
+    this.loveIntensity = 0.0,
+    this.loveSender,
+    this.loveTime,
+    this.isPrivate = false,
   });
 
   bool get hasPhoto => imagePath != null && imagePath!.isNotEmpty;
@@ -102,6 +110,10 @@ class Post {
         'author': author.id,
         'time': time.toIso8601String(),
         'loved': loved,
+        'loveIntensity': loveIntensity,
+        'loveSender': loveSender?.id,
+        'loveTime': loveTime?.toIso8601String(),
+        'isPrivate': isPrivate,
       };
 
   factory Post.fromJson(Map<String, dynamic> j) => Post(
@@ -112,6 +124,42 @@ class Post {
         author: SenderX.fromId(j['author']),
         time: DateTime.parse(j['time']),
         loved: j['loved'] ?? false,
+        loveIntensity: (j['loveIntensity'] as num?)?.toDouble() ?? 0.0,
+        loveSender: j['loveSender'] != null ? SenderX.fromId(j['loveSender']) : null,
+        loveTime: j['loveTime'] != null ? DateTime.tryParse(j['loveTime']) : null,
+        isPrivate: j['isPrivate'] ?? false,
+      );
+}
+
+/// A compliment on a post.
+class Compliment {
+  final String id;
+  final String postId;
+  final String text;
+  final Sender sender;
+  final DateTime time;
+
+  const Compliment({
+    required this.id,
+    required this.postId,
+    required this.text,
+    required this.sender,
+    required this.time,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'postId': postId,
+        'text': text,
+        'sender': sender.id,
+        'time': time.toIso8601String(),
+      };
+
+  factory Compliment.fromJson(String id, Map<String, dynamic> j) => Compliment(
+        id: id,
+        postId: j['postId'] ?? '',
+        text: j['text'] ?? '',
+        sender: SenderX.fromId(j['sender']),
+        time: DateTime.parse(j['time']),
       );
 }
 
