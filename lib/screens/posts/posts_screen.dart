@@ -204,6 +204,7 @@ class _PostsScreenState extends State<PostsScreen> {
     final caption = TextEditingController();
     String emoji = '🌸';
     String? photoPath;
+    bool isPrivate = false;
     const choices = ['🌸', '🌅', '🍰', '🎁', '🏖️', '🌙', '🐾', '☕', '💐', '🎶'];
 
     showModalBottomSheet(
@@ -332,7 +333,49 @@ class _PostsScreenState extends State<PostsScreen> {
                     decoration: const InputDecoration(
                         hintText: 'Write a little something…'),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
+                  // Private toggle
+                  GestureDetector(
+                    onTap: () {
+                      Haptic.select();
+                      setSheet(() => isPrivate = !isPrivate);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: isPrivate
+                            ? GataColors.rose.withValues(alpha: 0.12)
+                            : GataColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isPrivate
+                              ? GataColors.rose.withValues(alpha: 0.4)
+                              : GataColors.dividerColor,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isPrivate ? Icons.lock_rounded : Icons.lock_open_rounded,
+                            size: 16,
+                            color: isPrivate ? GataColors.rose : GataColors.textMuted,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            isPrivate ? 'Private moment' : 'Make private',
+                            style: GoogleFonts.nunito(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isPrivate ? GataColors.rose : GataColors.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -340,7 +383,8 @@ class _PostsScreenState extends State<PostsScreen> {
                         if (caption.text.trim().isEmpty && photoPath == null) {
                           return;
                         }
-                        app.addPost(caption.text, emoji, imagePath: photoPath);
+                        app.addPost(caption.text, emoji,
+                            imagePath: photoPath, isPrivate: isPrivate);
                         Navigator.pop(ctx);
                       },
                       child: const Text('Post 💕'),
