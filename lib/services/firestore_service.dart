@@ -107,10 +107,43 @@ class FirestoreService {
         'author': p.author.id,
         'time': Timestamp.fromDate(p.time),
         'loved': p.loved,
+        'loveIntensity': p.loveIntensity,
+        'loveSender': p.loveSender?.id,
+        'loveTime': p.loveTime != null ? Timestamp.fromDate(p.loveTime!) : null,
+        'isPrivate': p.isPrivate,
       });
 
   static Future<void> toggleLove(String id, bool loved) =>
       _posts.doc(id).update({'loved': loved});
+
+  static Future<void> setLove(String id, double intensity, String senderId) =>
+      _posts.doc(id).update({
+        'loved': true,
+        'loveIntensity': intensity,
+        'loveSender': senderId,
+        'loveTime': FieldValue.serverTimestamp(),
+      });
+
+  // ── compliments ────────────────────────────────────────────
+  static CollectionReference get _compliments => _room.collection('compliments');
+
+  static Future<void> sendCompliment(Compliment c) =>
+      _compliments.doc(c.id).set(c.toJson()..['time'] = Timestamp.fromDate(c.time));
+
+  static Stream<List<Compliment>> watchCompliments(String postId) {
+    return _compliments
+        .where('postId', isEqualTo: postId)
+        .orderBy('time', descending: true)
+        .limit(50)
+        .snapshots()
+        .map((s) => s.docs.map((d) {
+              final data = d.data() as Map<String, dynamic>;
+              return Compliment.fromJson(d.id, {
+                ...data,
+                'time': (data['time'] as Timestamp).toDate().toIso8601String(),
+              });
+            }).toList());
+  }
 
   // ── shared space: note, bucket, moods ───────────────────
   static Future<void> setNote(String note) =>
