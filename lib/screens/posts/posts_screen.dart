@@ -139,7 +139,11 @@ class _PostsScreenState extends State<PostsScreen> {
 
   // ── gallery ────────────────────────────────────────────
   Widget _gallery(AppState app) {
-    final photos = app.photoPosts;
+    final photos = app.photoPosts.where((p) {
+      if (p.imagePath == null) return false;
+      if (p.imagePath!.startsWith('http')) return true;
+      return File(p.imagePath!).existsSync();
+    }).toList();
     if (photos.isEmpty) {
       return _empty('🖼️', 'No photos yet.\nAdd a couple photo 💞');
     }
@@ -159,19 +163,57 @@ class _PostsScreenState extends State<PostsScreen> {
             tag: p.id,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(16),
-              child: Image.file(
-                File(p.imagePath!),
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  color: GataColors.lavenderLight,
-                  child: const Icon(Icons.broken_image_rounded,
-                      color: GataColors.textMuted),
-                ),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  _galleryImage(p),
+                  if (p.isPrivate)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.4),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.lock_rounded,
+                            color: GataColors.rose, size: 20),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  Widget _galleryImage(Post p) {
+    final path = p.imagePath!;
+    if (path.startsWith('http')) {
+      return CachedNetworkImage(
+        imageUrl: path,
+        fit: BoxFit.cover,
+        placeholder: (_, _) => Container(
+          color: GataColors.surfaceElevated,
+          child: const Center(
+            child: SizedBox(width: 20, height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2, color: GataColors.rose)),
+          ),
+        ),
+        errorWidget: (_, _, _) => Container(
+          color: GataColors.surfaceElevated,
+          child: const Icon(Icons.broken_image_rounded,
+              color: GataColors.textMuted),
+        ),
+      );
+    }
+    return Image.file(
+      File(path),
+      fit: BoxFit.cover,
+      errorBuilder: (_, _, _) => Container(
+        color: GataColors.surfaceElevated,
+        child: const Icon(Icons.broken_image_rounded,
+            color: GataColors.textMuted),
+      ),
     );
   }
 
