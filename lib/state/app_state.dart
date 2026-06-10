@@ -258,8 +258,36 @@ class AppState extends ChangeNotifier {
     final i = posts.indexWhere((p) => p.id == id);
     if (i == -1) return;
     posts[i].loved = !posts[i].loved;
+    if (!posts[i].loved) {
+      posts[i].loveIntensity = 0.0;
+      posts[i].loveSender = null;
+      posts[i].loveTime = null;
+    }
     notifyListeners();
     await FirestoreService.toggleLove(id, posts[i].loved);
+  }
+
+  Future<void> sendLove(String id, double intensity) async {
+    final i = posts.indexWhere((p) => p.id == id);
+    if (i == -1) return;
+    posts[i].loved = true;
+    posts[i].loveIntensity = intensity;
+    posts[i].loveSender = activeSender;
+    posts[i].loveTime = DateTime.now();
+    notifyListeners();
+    await FirestoreService.setLove(id, intensity, activeSender.id);
+  }
+
+  Future<void> sendCompliment(String postId, String text) async {
+    final c = Compliment(
+      id: _uuid.v4(),
+      postId: postId,
+      text: text,
+      sender: activeSender,
+      time: DateTime.now(),
+    );
+    notifyListeners();
+    await FirestoreService.sendCompliment(c);
   }
 
   // ── shared space ───────────────────────────────────────
