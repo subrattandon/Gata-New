@@ -95,6 +95,22 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {});
     _scrollToBottom();
   }
+
+  void _startCall(BuildContext context, AppState app, bool isVideo) {
+    Haptic.heavy();
+    final myEmail = AuthService.myEmail();
+    Navigator.of(context).push(MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => CallScreen(
+        callService: _callService,
+        partner: app.userFor(Sender.her),
+        isVideo: isVideo,
+        isIncoming: false,
+        myEmail: myEmail,
+        partnerEmail: app.herEmail,
+      ),
+    ));
+  }
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
