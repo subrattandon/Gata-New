@@ -617,13 +617,34 @@ class _PhotoViewerState extends State<_PhotoViewer> {
         onPageChanged: (i) => setState(() => _i = i),
         itemBuilder: (_, i) {
           final photo = widget.photos[i];
+          final path = photo.imagePath!;
+          Widget image;
+          if (path.startsWith('http')) {
+            image = CachedNetworkImage(
+              imageUrl: path,
+              fit: BoxFit.contain,
+              placeholder: (_, _) => const Center(
+                child: CircularProgressIndicator(color: GataColors.rose)),
+              errorWidget: (_, _, _) => const Center(
+                child: Icon(Icons.broken_image_rounded,
+                    color: GataColors.textMuted, size: 48)),
+            );
+          } else {
+            image = Image.file(
+              File(path),
+              fit: BoxFit.contain,
+              errorBuilder: (_, _, _) => const Center(
+                child: Icon(Icons.broken_image_rounded,
+                    color: GataColors.textMuted, size: 48)),
+            );
+          }
           return Center(
             child: Hero(
               tag: photo.id,
               child: InteractiveViewer(
                 minScale: 1,
                 maxScale: 4,
-                child: Image.file(File(photo.imagePath!), fit: BoxFit.contain),
+                child: image,
               ),
             ),
           );
