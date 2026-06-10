@@ -1,16 +1,21 @@
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../services/firestore_service.dart';
 import '../services/haptic_service.dart';
+import '../state/app_state.dart';
 import '../theme/gata_theme.dart';
 
 // ─────────────────────────────────────────────────────────────
-// Demo card — warm bisque/coral gradient, no real post needed
+// Demo card
 // ─────────────────────────────────────────────────────────────
 
 class DemoFlipCard extends StatelessWidget {
@@ -20,7 +25,7 @@ class DemoFlipCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final post = Post(
       id: '__demo__',
-      caption: 'Double-tap the photo to love it 💕\nFlip to leave a compliment.',
+      caption: 'Hold the heart to send love 💕\nFlip to leave a compliment.',
       emoji: '🐱',
       author: Sender.her,
       time: DateTime.now(),
@@ -29,7 +34,7 @@ class DemoFlipCard extends StatelessWidget {
       key: const ValueKey('demo'),
       post: post,
       author: const AppUser(name: 'Her', emoji: '🌷'),
-      onLike: () {},
+      onLove: (_, __) {},
       isDemo: true,
     );
   }
@@ -44,7 +49,7 @@ class FeedPostCard extends StatefulWidget {
     super.key,
     required this.post,
     required this.author,
-    required this.onLike,
+    required this.onLove,
     this.onCompliment,
     this.onProfileTap,
     this.isDemo = false,
@@ -52,7 +57,7 @@ class FeedPostCard extends StatefulWidget {
 
   final Post post;
   final AppUser author;
-  final VoidCallback onLike;
+  final void Function(String postId, double intensity) onLove;
   final ValueChanged<String>? onCompliment;
   final VoidCallback? onProfileTap;
   final bool isDemo;
@@ -83,9 +88,13 @@ class _FeedPostCardState extends State<FeedPostCard>
   late final Animation<double> _msgOpacity;
   late final Animation<double> _msgY;
 
-  // ── Like scale ───────────────────────────────────────────
-  late final AnimationController _likeCtrl;
-  late final Animation<double> _likeScale;
+  // ── Hold-to-love ─────────────────────────────────────────
+  late final AnimationController _holdCtrl;
+  double _holdIntensity = 0.0;
+  bool _isHolding = false;
+
+  // ── Glow ─────────────────────────────────────────────────
+  late final AnimationController _glowCtrl;
 
   String? _sentCompliment;
 
@@ -95,14 +104,16 @@ class _FeedPostCardState extends State<FeedPostCard>
 
     _flipCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 800));
-    _flipAnim = CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOutCubic);
+    _flipAnim =
+        CurvedAnimation(parent: _flipCtrl, curve: Curves.easeInOutCubic);
 
     _entryCtrl = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 500));
     _entryOpacity = Tween(begin: 0.0, end: 1.0)
         .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOut));
     _entrySlide = Tween(begin: const Offset(0, 0.06), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
+        .animate(
+            CurvedAnimation(parent: _entryCtrl, curve: Curves.easeOutCubic));
     _entryCtrl.forward();
 
     _heartCtrl = AnimationController(
@@ -130,12 +141,23 @@ class _FeedPostCardState extends State<FeedPostCard>
     _msgY = Tween(begin: 20.0, end: -20.0)
         .animate(CurvedAnimation(parent: _msgCtrl, curve: Curves.easeOut));
 
-    _likeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 200));
-    _likeScale = TweenSequence([
-      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.4), weight: 50),
-      TweenSequenceItem(tween: Tween(begin: 1.4, end: 1.0), weight: 50),
-    ]).animate(CurvedAnimation(parent: _likeCtrl, curve: Curves.easeInOut));
+    _holdCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 2500))
+      ..addListener(() {
+        setState(() => _holdIntensity = _holdCtrl.value);
+        // Haptic pulses at 25%, 50%, 75%, 100%
+        final v = _holdCtrl.value;
+        if ((v - 0.25).abs() < 0.01 ||
+            (v - 0.50).abs() < 0.01 ||
+            (v - 0.75).abs() < 0.01 ||
+            (v - 1.0).abs() < 0.01) {
+          Haptic.light();
+        }
+      });
+
+    _glowCtrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200))
+      ..repeat(reverse: true);
   }
 
   @override
@@ -144,7 +166,8 @@ class _FeedPostCardState extends State<FeedPostCard>
     _entryCtrl.dispose();
     _heartCtrl.dispose();
     _msgCtrl.dispose();
-    _likeCtrl.dispose();
+    _holdCtrl.dispose();
+    _glowCtrl.dispose();
     super.dispose();
   }
 
@@ -157,25 +180,39 @@ class _FeedPostCardState extends State<FeedPostCard>
     }
   }
 
-  void _doubleTapLike() {
-    Haptic.love();
-    if (!widget.post.loved) widget.onLike();
-    _heartCtrl.forward(from: 0);
-    _msgCtrl.forward(from: 0);
+  void _startHoldLove() {
+    if (widget.isDemo) return;
+    _isHolding = true;
+    _holdCtrl.forward(from: 0);
+    Haptic.soft();
   }
 
-  void _tapLike() {
+  void _endHoldLove() {
+    if (!_isHolding) return;
+    _isHolding = false;
+    _holdCtrl.stop();
+    final intensity = _holdIntensity.clamp(0.1, 1.0);
+    widget.onLove(widget.post.id, intensity);
+    _heartCtrl.forward(from: 0);
+    _msgCtrl.forward(from: 0);
     Haptic.love();
-    widget.onLike();
-    _likeCtrl.forward(from: 0);
+    setState(() => _holdIntensity = 0.0);
+  }
+
+  void _doubleTapLove() {
+    Haptic.love();
+    widget.onLove(widget.post.id, 1.0);
+    _heartCtrl.forward(from: 0);
+    _msgCtrl.forward(from: 0);
   }
 
   void _sendCompliment(String text) {
     Haptic.success();
     setState(() => _sentCompliment = text);
     widget.onCompliment?.call(text);
-    Future.delayed(const Duration(milliseconds: 2200),
-        () { if (mounted) setState(() => _sentCompliment = null); });
+    Future.delayed(const Duration(milliseconds: 2200), () {
+      if (mounted) setState(() => _sentCompliment = null);
+    });
   }
 
   @override
@@ -232,9 +269,14 @@ class _FeedPostCardState extends State<FeedPostCard>
         // Full-bleed image / demo gradient
         _frontImage(),
 
-        // Subtle top gradient for readability (no blur)
+        // Private post blur overlay
+        if (widget.post.isPrivate) _privateOverlay(),
+
+        // Subtle top gradient for readability
         Positioned(
-          top: 0, left: 0, right: 0,
+          top: 0,
+          left: 0,
+          right: 0,
           height: 80,
           child: Container(
             decoration: const BoxDecoration(
@@ -247,9 +289,41 @@ class _FeedPostCardState extends State<FeedPostCard>
           ),
         ),
 
+        // Private badge
+        if (widget.post.isPrivate)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                    color: GataColors.rose.withValues(alpha: 0.4), width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.lock_rounded,
+                      size: 12, color: GataColors.rose),
+                  const SizedBox(width: 4),
+                  Text('Private',
+                      style: GoogleFonts.nunito(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: GataColors.rose,
+                      )),
+                ],
+              ),
+            ),
+          ),
+
         // Bottom strip
         Positioned(
-          bottom: 0, left: 0, right: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
           child: _frontStrip(),
         ),
 
@@ -258,7 +332,98 @@ class _FeedPostCardState extends State<FeedPostCard>
 
         // Love message
         _loveMessage(),
+
+        // Hold glow overlay
+        if (_isHolding) _holdGlow(),
       ],
+    );
+  }
+
+  Widget _privateOverlay() {
+    return Positioned.fill(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  GataColors.rose.withValues(alpha: 0.08),
+                  GataColors.lavender.withValues(alpha: 0.08),
+                ],
+              ),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.08),
+                      border: Border.all(
+                          color: GataColors.rose.withValues(alpha: 0.3),
+                          width: 1.5),
+                    ),
+                    child: const Icon(Icons.lock_rounded,
+                        color: GataColors.rose, size: 28),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Private moment',
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.7),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Only you two can see this',
+                    style: GoogleFonts.nunito(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _holdGlow() {
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: AnimatedBuilder(
+          animation: _glowCtrl,
+          builder: (_, _) => Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(
+                color: GataColors.rose
+                    .withValues(alpha: _holdIntensity * 0.6 * (0.5 + _glowCtrl.value * 0.5)),
+                width: 2 + _holdIntensity * 3,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: GataColors.rose.withValues(alpha: _holdIntensity * 0.3),
+                  blurRadius: 20 + _holdIntensity * 30,
+                  spreadRadius: _holdIntensity * 8,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -271,10 +436,10 @@ class _FeedPostCardState extends State<FeedPostCard>
             end: Alignment.bottomRight,
             stops: [0.0, 0.6, 0.88, 1.0],
             colors: [
-              Color(0xFFFFE4C4), // bisque
+              Color(0xFFFFE4C4),
               Color(0xFFFFE7DE),
               Color(0xFFFFD3C3),
-              Color(0xFFFF7F50), // coral-ish
+              Color(0xFFFF7F50),
             ],
           ),
         ),
@@ -296,7 +461,7 @@ class _FeedPostCardState extends State<FeedPostCard>
               ),
               const SizedBox(height: 8),
               Text(
-                'Double-tap to love • Flip to compliment',
+                'Hold heart to love • Flip to compliment',
                 textAlign: TextAlign.center,
                 style: GoogleFonts.nunito(
                   fontSize: 12,
@@ -311,7 +476,7 @@ class _FeedPostCardState extends State<FeedPostCard>
     }
 
     return GestureDetector(
-      onDoubleTap: _doubleTapLike,
+      onDoubleTap: _doubleTapLove,
       child: Hero(
         tag: 'post_${widget.post.id}',
         child: _resolveImage(),
@@ -324,8 +489,8 @@ class _FeedPostCardState extends State<FeedPostCard>
       return Container(
         decoration: const BoxDecoration(gradient: GataColors.lavenderGlow),
         child: Center(
-          child: Text(widget.post.emoji,
-              style: const TextStyle(fontSize: 96)),
+          child:
+              Text(widget.post.emoji, style: const TextStyle(fontSize: 96)),
         ),
       );
     }
@@ -339,8 +504,10 @@ class _FeedPostCardState extends State<FeedPostCard>
         errorWidget: (_, _, _) => _brokenImage(),
       );
     }
+    final file = File(path);
+    if (!file.existsSync()) return _brokenImage();
     return Image.file(
-      File(path),
+      file,
       fit: BoxFit.cover,
       filterQuality: FilterQuality.high,
       errorBuilder: (_, _, _) => _brokenImage(),
@@ -349,9 +516,21 @@ class _FeedPostCardState extends State<FeedPostCard>
 
   Widget _brokenImage() => Container(
         color: GataColors.surfaceElevated,
-        child: const Center(
-          child: Icon(Icons.broken_image_rounded,
-              color: GataColors.textMuted, size: 48),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.broken_image_rounded,
+                  color: GataColors.textMuted, size: 48),
+              const SizedBox(height: 8),
+              Text('Photo unavailable',
+                  style: GoogleFonts.nunito(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: GataColors.textMuted,
+                  )),
+            ],
+          ),
         ),
       );
 
@@ -413,40 +592,83 @@ class _FeedPostCardState extends State<FeedPostCard>
 
           const Spacer(),
 
-          // Like button
-          AnimatedBuilder(
-            animation: _likeScale,
-            builder: (_, child) =>
-                Transform.scale(scale: _likeScale.value, child: child),
-            child: GestureDetector(
-              onTap: _tapLike,
-              child: Row(
-                children: [
-                  Icon(
-                    widget.post.loved
-                        ? Icons.favorite_rounded
-                        : Icons.favorite_border_rounded,
-                    color: widget.post.loved ? GataColors.rose : Colors.white,
-                    size: 20,
-                    shadows: const [
-                      Shadow(color: Color(0x88000000), blurRadius: 4),
-                    ],
+          // Hold-to-love heart button
+          GestureDetector(
+            onLongPressStart: (_) => _startHoldLove(),
+            onLongPressEnd: (_) => _endHoldLove(),
+            onTap: () {
+              if (!widget.isDemo) {
+                Haptic.love();
+                widget.onLove(widget.post.id, 0.5);
+                _heartCtrl.forward(from: 0);
+                _msgCtrl.forward(from: 0);
+              }
+            },
+            child: AnimatedBuilder(
+              animation: _holdCtrl,
+              builder: (_, _) {
+                final scale = 1.0 + _holdIntensity * 0.8;
+                return Transform.scale(
+                  scale: _isHolding ? scale : 1.0,
+                  child: Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: widget.post.loved
+                          ? GataColors.rose.withValues(alpha: 0.25)
+                          : Colors.white.withValues(alpha: 0.12),
+                      boxShadow: _isHolding
+                          ? [
+                              BoxShadow(
+                                color: GataColors.rose
+                                    .withValues(alpha: _holdIntensity * 0.6),
+                                blurRadius: 16 + _holdIntensity * 16,
+                                spreadRadius: _holdIntensity * 4,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Icon(
+                      widget.post.loved || _isHolding
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: widget.post.loved || _isHolding
+                          ? GataColors.rose
+                          : Colors.white,
+                      size: 22,
+                      shadows: const [
+                        Shadow(color: Color(0x88000000), blurRadius: 4),
+                      ],
+                    ),
                   ),
-                  if (widget.post.loved) ...[
-                    const SizedBox(width: 4),
-                    Text('1',
-                        style: GoogleFonts.nunito(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: GataColors.rose,
-                        )),
-                  ],
-                ],
-              ),
+                );
+              },
             ),
           ),
 
-          const SizedBox(width: 16),
+          const SizedBox(width: 10),
+
+          // Compliment button
+          GestureDetector(
+            onTap: () {
+              Haptic.select();
+              _showComplimentSheet(context);
+            },
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.12),
+              ),
+              child: const Icon(Icons.chat_bubble_outline_rounded,
+                  size: 19, color: Colors.white,
+                  shadows: [Shadow(color: Color(0x88000000), blurRadius: 4)]),
+            ),
+          ),
+
+          const SizedBox(width: 10),
 
           // Flip button
           GestureDetector(
@@ -465,7 +687,7 @@ class _FeedPostCardState extends State<FeedPostCard>
                   const Icon(Icons.flip_rounded,
                       size: 13, color: Colors.white),
                   const SizedBox(width: 4),
-                  Text('Her Story',
+                  Text('Story',
                       style: GoogleFonts.nunito(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -476,6 +698,123 @@ class _FeedPostCardState extends State<FeedPostCard>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showComplimentSheet(BuildContext context) {
+    if (widget.isDemo) return;
+    const pills = [
+      'You look gorgeous 💕',
+      'Love this! 🌸',
+      'So cute! 🥺',
+      'Miss you 💌',
+      'Beautiful ✨',
+      'Made my day 🥰',
+    ];
+    final custom = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: GataColors.surfaceFloat,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  decoration: BoxDecoration(
+                      color: GataColors.rose.withValues(alpha: 0.25),
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text('Leave a compliment 💌',
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: GataColors.textPrimary,
+                  )),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: pills.map((p) {
+                  return GestureDetector(
+                    onTap: () {
+                      _sendCompliment(p);
+                      widget.onCompliment?.call(p);
+                      Navigator.pop(ctx);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: GataColors.surfaceElevated,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: GataColors.rose.withValues(alpha: 0.25),
+                            width: 1),
+                      ),
+                      child: Text(p,
+                          style: GoogleFonts.nunito(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: GataColors.textPrimary,
+                          )),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: custom,
+                      textCapitalization: TextCapitalization.sentences,
+                      style: GoogleFonts.nunito(fontWeight: FontWeight.w600),
+                      decoration: const InputDecoration(
+                          hintText: 'Write something sweet…'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () {
+                      if (custom.text.trim().isNotEmpty) {
+                        _sendCompliment(custom.text.trim());
+                        widget.onCompliment?.call(custom.text.trim());
+                        Navigator.pop(ctx);
+                      }
+                    },
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      decoration: const BoxDecoration(
+                        gradient: GataColors.blush,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.send_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -545,7 +884,7 @@ class _FeedPostCardState extends State<FeedPostCard>
                       ],
                     ),
                     child: Text(
-                      'She knows you love it 💕',
+                      'She feels your love 💕',
                       style: GoogleFonts.nunito(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
@@ -571,10 +910,10 @@ class _FeedPostCardState extends State<FeedPostCard>
             end: Alignment.bottomRight,
             stops: [0.0, 0.30, 0.78, 1.0],
             colors: [
-              Color(0xFFFFAE91), // warm coral-bisque
-              Color(0xFFFF7F50), // coral
-              Color(0xFFFFE4C4), // bisque
-              Color(0xFFFFB9A0), // warm
+              Color(0xFFFFAE91),
+              Color(0xFFFF7F50),
+              Color(0xFFFFE4C4),
+              Color(0xFFFFB9A0),
             ],
           )
         : const LinearGradient(
@@ -686,7 +1025,7 @@ class _FeedPostCardState extends State<FeedPostCard>
         ),
         const SizedBox(height: 10),
         Text(
-          '“$text”',
+          '"$text"',
           style: GoogleFonts.playfairDisplay(
             fontSize: 16,
             fontWeight: FontWeight.w500,
@@ -702,77 +1041,94 @@ class _FeedPostCardState extends State<FeedPostCard>
   }
 
   Widget _complimentSection() {
-    const pills = [
-      'You look gorgeous 💕',
-      'Love this! 🌸',
-      'So cute! 🥺',
-      'Miss you 💌',
-    ];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Compliment her',
-          style: GoogleFonts.nunito(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: Colors.white.withValues(alpha: 0.65),
-            letterSpacing: 0.8,
+    if (widget.isDemo) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Compliments appear here',
+            style: GoogleFonts.nunito(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: Colors.white.withValues(alpha: 0.65),
+              letterSpacing: 0.8,
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: pills.map((p) => _complimentPill(p)).toList(),
-        ),
-        if (_sentCompliment != null) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              const Icon(Icons.check_circle_rounded,
-                  size: 14, color: Colors.white),
-              const SizedBox(width: 6),
-              Text(
-                'Sent! She\'ll love it 💕',
-                style: GoogleFonts.nunito(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+          const SizedBox(height: 8),
+          _complimentPill('You look gorgeous 💕'),
+        ],
+      );
+    }
+
+    return StreamBuilder<List<Compliment>>(
+      stream: FirestoreService.watchCompliments(widget.post.id),
+      builder: (context, snap) {
+        final compliments = snap.data ?? [];
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              compliments.isEmpty ? 'No compliments yet' : 'Compliments',
+              style: GoogleFonts.nunito(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: Colors.white.withValues(alpha: 0.65),
+                letterSpacing: 0.8,
+              ),
+            ),
+            if (compliments.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 36,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: compliments.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) => _complimentPill(compliments[i].text),
                 ),
               ),
             ],
-          ),
-        ],
-      ],
+            if (_sentCompliment != null) ...[
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  const Icon(Icons.check_circle_rounded,
+                      size: 14, color: Colors.white),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Sent! She\'ll love it 💕',
+                    style: GoogleFonts.nunito(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        );
+      },
     );
   }
 
   Widget _complimentPill(String text) {
-    final isSent = _sentCompliment == text;
-    return GestureDetector(
-      onTap: widget.isDemo ? null : () => _sendCompliment(text),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSent
-              ? Colors.white.withValues(alpha: 0.35)
-              : Colors.white.withValues(alpha: 0.18),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: Colors.white.withValues(alpha: isSent ? 0.6 : 0.3),
-            width: 1,
-          ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.3),
+          width: 1,
         ),
-        child: Text(
-          text,
-          style: GoogleFonts.nunito(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: Colors.white,
-          ),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.nunito(
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+          color: Colors.white,
         ),
       ),
     );
@@ -793,8 +1149,7 @@ class _FeedPostCardState extends State<FeedPostCard>
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.flip_rounded,
-                  size: 14, color: Colors.white),
+              const Icon(Icons.flip_rounded, size: 14, color: Colors.white),
               const SizedBox(width: 6),
               Text(
                 'Flip back',
